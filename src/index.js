@@ -1,234 +1,184 @@
-const express = require("express");
-const movies = require("./movies");
-const connection = require("./config");
+const express = require('express');
+const connection = require('./config');
 
 const port = 3000;
 const app = express();
 
-// We try to connect to the Database
+// Connexion
 connection.connect(function (err) {
   if (err) {
-    console.error("error connecting: " + err.stack);
+    console.error('error connecting: ' + err.stack);
     return;
   }
-  console.log("connected as id " + connection.threadId);
+
+  console.log('connected as id ' + connection.threadId);
 });
 
-// We use a middleware to read json formatted Body request
-app.use(express.json());
-
-// Main route
-app.get("/", (req, res) => {
-  res.send("Welcome to my favorite movie list");
+// Bienvenue sur l'API
+app.get('/', (req, res) => {
+  res.send('Welcome to the API listing the pages of my blog');
 });
 
-// This route will send back all the movies
-app.get("/api/movies", (req, res) => {
-  connection.query("SELECT * from movies", (err, results) => {
+// Recupérer toutes les pages du site
+app.get('/api/pages', (req, res) => {
+  connection.query('SELECT * from titu_statistics_pages', (err, results) => {
     if (err) {
-      res.status(500).send("Error retrieving data");
+      res.status(500).send('Error retrieving data');
     } else {
       res.status(200).json(results);
     }
   });
 });
 
-// This route will send back only the movie that matches the Id from the request.params
-// ex: localhost:3000/api/movies/1
-app.get("/api/movies/:id", (req, res) => {
+// Recupérer une page par son id
+app.get('/api/pages/:id', (req, res) => {
   connection.query(
-    `SELECT * from movies WHERE id=?`,
+    'SELECT * from titu_statistics_pages WHERE id = ?',
+    [req.params.id],
+    (err, results) => {
+      if (err) {
+        res.status(500).send('Error retrieving data');
+      } else {
+        res.status(200).json(results);
+      }
+    }
+  );
+});
+
+// Recupérer une page qui est un article
+app.get('/api/pages/posts', (req, res) => {
+  connection.query(
+    "SELECT * from titu_statistics_pages WHERE type = 'post'",
+    (err, results) => {
+      if (err) {
+        res.status(500).send('Error retrieving data');
+      } else {
+        res.status(200).json(results);
+      }
+    }
+  );
+});
+
+// Recupérer les commencant par 'presta'
+app.get('/api/pages/presta', (req, res) => {
+  connection.query(
+    "SELECT * from titu_statistics_pages WHERE uri = 'presta%'",
+    (err, results) => {
+      if (err) {
+        res.status(500).send('Error retrieving data');
+      } else {
+        res.status(200).json(results);
+      }
+    }
+  );
+});
+
+// Recupérer les élements postérieurs à 2018
+app.get('/api/pages/recent', (req, res) => {
+  connection.query(
+    'SELECT * from titu_statistics_pages WHERE date < 01-01-2018',
+    (err, results) => {
+      if (err) {
+        res.status(500).send('Error retrieving data');
+      } else {
+        res.status(200).json(results);
+      }
+    }
+  );
+});
+
+//  Récupérer les pages par dates de publication
+app.get('/api/pages/sort', (req, res) => {
+  connection.query(
+    'SELECT * from titu_statistics_pages ORDER BY date ?',
+    [req.query.asc ? 'ASC' : 'DESC'],
+    (err, results) => {
+      if (err) {
+        res.status(500).send('Error retrieving data');
+      } else {
+        res.status(200).json(results);
+      }
+    }
+  );
+});
+
+//  Ajouter une page à la liste des pages
+app.post('/api/pages', (req, res) => {
+  const { page_id, uri, type, date, count } = req.body;
+  connection.query(
+    'INSERT INTO titu_statistics_pages (page_id, uri, type, date, count) VALUES (?,?,?,?,?)',
+    [page_id, uri, type, date, count],
+    (err, results) => {
+      if (err) {
+        console.log(err);
+        res.status(500).send('Error creating a new page');
+      } else {
+        res.status(200).send('New page created');
+      }
+    }
+  );
+});
+
+//  Modifier les données d'une page listée
+app.put('/api/page/:id', (req, res) => {
+  connection.query(
+    'UPDATE titu_statistics_pages SET ? WHERE id = ?',
+    [req.body, req.params.id],
+    (err, results) => {
+      if (err) {
+        console.log(err);
+        res.status(500).send('Error updating a page');
+      } else {
+        res.status(200).send('Page list updated succesfully');
+      }
+    }
+  );
+});
+
+app.put('/api/page/count/:id', (req, res) => {
+  connection.query(
+    'UPDATE titu_statistics_pages SET count = !count WHERE id = ?',
     [req.params.id],
     (err, results) => {
       if (err) {
         console.log(err);
-        res.status(500).send("Error retrieving data");
+        res.status(500).send('Error updating the status');
       } else {
-        res.status(200).json(results);
+        res.status(200).send('Status changed');
       }
     }
   );
 });
 
-// This route will send back only the movie that matches the Id from the request.params
-// ex: localhost:3000/api/movies/1
-app.put("/api/movies/:id", (req, res) => {
-  // We get the ID from the url:
-  const idMovie = req.params.id;
-
-  // We get the data from the req.body
-  const newMovie = req.body;
-
-  // We send a UPDATE query to the DB
+app.delete('/api/page/:id', (req, res) => {
   connection.query(
-    "UPDATE movies SET ? WHERE id = ?",
-    [newMovie, idMovie],
+    'DELETE FROM titu_statistics_pages WHERE id = ?',
+    [req.params.id],
     (err, results) => {
       if (err) {
         console.log(err);
-        res.status(500).send("Error updating a movie");
+        res.status(500).send(' Error deleting a page');
       } else {
-        res.status(200).send("Movie updated successfully 🎉");
+        res.status(200).send('Page deleted!');
       }
     }
   );
 });
 
-// This route will send back the movie that are shorter or equal to the duration specify in the url query string
-// ex: localhost:3000/api/search?duration=120
-app.get("/api/search", (req, res) => {
+app.delete('/api/page', (req, res) => {
   connection.query(
-    `SELECT * from movies WHERE duration<=?`,
-    [req.query.durationMax],
+    'DELETE FROM titu_statistics_pages WHERE count = 0',
     (err, results) => {
       if (err) {
         console.log(err);
-        res.status(500).send("Error retrieving data");
+        res.status(500).send('Error deleting page');
       } else {
-        res.status(200).json(results);
+        res.status(200).send('Page deleted!');
       }
     }
   );
 });
 
-// This route will create a new movie in the DB
-app.post("/api/movies", (req, res) => {
-  const { title, director, year, color, duration } = req.body;
-  connection.query(
-    "INSERT INTO movies(title, director, year, color, duration) VALUES(?, ?, ?, ?, ?)",
-    [title, director, year, color, duration],
-    (err, results) => {
-      if (err) {
-        console.log(err);
-        res.status(500).send("Error saving a movie");
-      } else {
-        res.status(200).send("Successfully saved");
-      }
-    }
-  );
-});
-
-app.delete("/api/movies/:id", (req, res) => {
-  const idMovie = req.params.id;
-
-  connection.query(
-    "DELETE FROM movies WHERE id = ?",
-    [idMovie],
-    (err, results) => {
-      if (err) {
-        console.log(err);
-        res.status(500).send("😱 Error deleting a movie");
-      } else {
-        res.status(200).send("🎉 Movie deleted!");
-      }
-    }
-  );
-});
-
-// respond to requests on `/api/users`
-app.get("/api/users", (req, res) => {
-  // send an SQL query to get all users
-  let sql = "SELECT * FROM users";
-  const sqlValues = [];
-
-  if (req.query.city) {
-    sql += " WHERE city = ?";
-    sqlValues.push(req.query.city);
-  }
-
-  connection.query(sql, sqlValues, (err, results) => {
-    if (err) {
-      // If an error has occurred, then the client is informed of the error
-      res.status(500).send(`An error occurred: ${err.message}`);
-    } else {
-      // If everything went well, we send the result of the SQL query as JSON
-      res.json(results);
-    }
-  });
-});
-
-app.get("/api/users/:id", (req, res) => {
-  const idUser = req.params.id;
-  connection.query(
-    "SELECT * FROM users WHERE id = ?",
-    [idUser],
-    (err, results) => {
-      if (err) {
-        console.log(err);
-        res.status(500).send("😱 Error deleting a movie");
-      } else {
-        res.status(200).json(results[0]);
-      }
-    }
-  );
-});
-
-// Post route for users
-app.post("/api/users", (req, res) => {
-  const { firstname, lastname, email } = req.body;
-  connection.query(
-    "INSERT INTO users(firstname, lastname, email) VALUES(?, ?, ?)",
-    [firstname, lastname, email],
-    (err, results) => {
-      if (err) {
-        console.log(err);
-        res.status(500).send("Error saving a User");
-      } else {
-        res.status(200).send("Successfully saved");
-      }
-    }
-  );
-});
-
-// This route will update a user in the DB
-app.put("/api/users/:id", (req, res) => {
-  // We get the ID from the url:
-  const idUser = req.params.id;
-
-  // We get the data from the req.body
-  const newUser = req.body;
-
-  // We send a UPDATE query to the DB
-  connection.query(
-    "UPDATE users SET ? WHERE id = ?",
-    [newUser, idUser],
-    (err, results) => {
-      if (err) {
-        console.log(err);
-        res.status(500).send("Error updating a user");
-      } else {
-        res.status(200).send("User updated successfully 🎉");
-      }
-    }
-  );
-});
-
-// // the ID is passed as information in the change form
-// app.put("/api/users", (req, res) => {
-//   const idMovie = req.body.id;
-// });
-
-app.delete("/api/users/:id", (req, res) => {
-  const idUser = req.params.id;
-
-  connection.query(
-    "DELETE FROM users WHERE id = ?",
-    [idUser],
-    (err, results) => {
-      if (err) {
-        console.log(err);
-        res.status(500).send("😱 Error deleting an user");
-      } else {
-        // If the array is empty that's mean the employee is not found
-        if (results.length === 0) {
-          return res.status(404).send("😱User not found");
-        } else {
-          res.status(200).send("🎉 User deleted!");
-        }
-      }
-    }
-  );
-});
 app.listen(port, () => {
   console.log(`Server is runing on 3000`);
 });
